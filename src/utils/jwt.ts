@@ -4,7 +4,7 @@ import { env } from '../config/env';
 
 export type AuthTokenPayload = {
   userId: number;
-  mobile_number: string;
+  email: string;
 };
 
 export const generateToken = (payload: AuthTokenPayload) => {

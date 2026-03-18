@@ -2,9 +2,9 @@ import { type NextFunction, type Request, type Response } from 'express';
 
 import { MESSAGES } from '../constants/messages';
 import { STATUS_CODES } from '../constants/statusCodes';
-import { login } from '../services/authService';
+import { login, signup } from '../services/authService';
 import { sendSuccess } from '../utils/responseHandler';
-import { type LoginRequestBody } from '../validators/authValidator';
+import { type LoginRequestBody, type SignupRequestBody } from '../validators/authValidator';
 
 export const loginController = async (
   req: Request<unknown, unknown, LoginRequestBody>,
@@ -19,3 +19,15 @@ export const loginController = async (
   }
 };
 
+export const signupController = async (
+  req: Request<unknown, unknown, SignupRequestBody>,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const result = await signup(req.body);
+    return sendSuccess(res, STATUS_CODES.OK, MESSAGES.SIGNUP_SUCCESS, result);
+  } catch (err) {
+    return next(err);
+  }
+};
