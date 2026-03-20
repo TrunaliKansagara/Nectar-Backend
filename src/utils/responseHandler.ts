@@ -4,7 +4,7 @@ export type ApiResponse<TData = unknown> = {
   success: boolean;
   message: string;
   data?: TData;
-  errors?: unknown;
+  error?: unknown;
 };
 
 export const sendSuccess = <TData>(
@@ -21,11 +21,11 @@ export const sendSuccess = <TData>(
   return res.status(statusCode).json(payload);
 };
 
-export const sendError = (res: Response, statusCode: number, message: string, errors?: unknown) => {
+export const sendError = (res: Response, statusCode: number, message: string, error?: unknown) => {
   const payload: ApiResponse = {
     success: false,
     message,
-    ...(errors === undefined ? {} : { errors }),
+    ...(error === undefined ? {} : { error }),
   };
   return res.status(statusCode).json(payload);
 };

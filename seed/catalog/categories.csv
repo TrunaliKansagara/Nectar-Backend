@@ -1,0 +1,13 @@
+id,name,image
+1,Groceries,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/groceries.svg
+2,Fruits,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/fruits.svg
+3,Vegetables,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/vegetables.svg
+4,Meat,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/meat.svg
+5,Chicken,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/chicken.svg
+6,Fish,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/fish.svg
+7,Dairy,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/dairy.svg
+8,Bakery,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/bakery.svg
+9,Beverages,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/beverages.svg
+10,Snacks,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/snacks.svg
+11,Pulses,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/pulses.svg
+12,Rice,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/categories/rice.svg
