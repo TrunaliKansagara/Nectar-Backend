@@ -9,7 +9,7 @@ import { sendError } from '../utils/responseHandler';
 export const errorMiddleware = (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof AppError) {
     logger.warn({ statusCode: err.statusCode }, err.message);
-    return sendError(res, err.statusCode, err.message);
+    return sendError(res, err.statusCode, err.message, err.details);
   }
 
   logger.error({ err }, 'Unhandled error');

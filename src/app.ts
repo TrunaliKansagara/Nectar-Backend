@@ -5,8 +5,10 @@ import helmet from 'helmet';
 import { MESSAGES } from './constants/messages';
 import { STATUS_CODES } from './constants/statusCodes';
 import { errorMiddleware } from './middleware/errorMiddleware';
+import { requestLogger } from './middleware/requestLogger';
 import { routes } from './routes';
-import { sendError, sendSuccess } from './utils/responseHandler';
+import { AppError } from './utils/appError';
+import { sendSuccess } from './utils/responseHandler';
 
 export const createApp = () => {
   const app = express();
@@ -14,6 +16,7 @@ export const createApp = () => {
   app.use(helmet());
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
+  app.use(requestLogger);
 
   app.get('/health', (_req: Request, res: Response) => {
     return sendSuccess(res, STATUS_CODES.OK, MESSAGES.HEALTH_OK);
@@ -21,8 +24,8 @@ export const createApp = () => {
 
   app.use(routes);
 
-  app.use((_req: Request, res: Response) => {
-    return sendError(res, STATUS_CODES.NOT_FOUND, MESSAGES.ROUTE_NOT_FOUND);
+  app.use((_req: Request, _res: Response) => {
+    throw new AppError(STATUS_CODES.NOT_FOUND, MESSAGES.ROUTE_NOT_FOUND);
   });
 
   app.use(errorMiddleware);

@@ -1,0 +1,6 @@
+id,name,description,price,image,category_id,brand_id,created_at
+1,Organic Bananas,"7pcs, Price. Sweet organic bananas, perfect for smoothies and breakfast.",4.99,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/products/bananas.png,2,2,2026-03-18T00:00:00Z
+2,Natural Red Apple,"1kg, Price. Crisp and juicy apples. Great for snacks and salads.",4.99,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/products/red-apple.png,2,1,2026-03-18T00:00:00Z
+3,Fresh Vegetables Pack,"Mixed seasonal vegetables pack for everyday cooking.",3.49,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/products/vegetables-pack.png,3,1,2026-03-18T00:00:00Z
+4,Beef Bone,"1kg, Price. Fresh beef bone cuts, ideal for soups and slow cooking.",4.99,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/products/beef-bone.png,4,1,2026-03-18T00:00:00Z
+5,Broiler Chicken,"1kg, Price. Fresh broiler chicken, cleaned and ready to cook.",4.99,https://<PROJECT_REF>.supabase.co/storage/v1/object/public/nectar-images/products/broiler-chicken.png,5,1,2026-03-18T00:00:00Z
