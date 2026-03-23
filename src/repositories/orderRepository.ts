@@ -17,40 +17,44 @@ export type CreateOrderInput = {
 
 export const createOrderRepo = async (input: CreateOrderInput) => {
     if (pool) {
-        const client = await pool.connect();
+        let client;
         try {
-            await client.query('BEGIN');
+            client = await pool.connect();
+            try {
+                await client.query('BEGIN');
 
-            // 1. Insert Order
-            const orderRes = await client.query(
-                `INSERT INTO orders (user_id, total_amount, delivery_method, payment_method, address_id, payment_status)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id`,
-                [input.userId, input.totalAmount, input.deliveryMethod, input.paymentMethod, input.addressId, 'pending'],
-            );
-            const orderId = Number(orderRes.rows[0].id);
+                // 1. Insert Order
+                const orderRes = await client.query(
+                    `INSERT INTO orders (user_id, total_amount, delivery_method, payment_method, address_id, payment_status)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id`,
+                    [input.userId, input.totalAmount, input.deliveryMethod, input.paymentMethod, input.addressId, 'pending'],
+                );
+                const orderId = Number(orderRes.rows[0].id);
 
-            // 2. Insert Items (Batch)
-            const values: any[] = [];
-            const itemQueries = input.items.map((it, idx) => {
-                const offset = idx * 4;
-                values.push(orderId, it.productId, it.quantity, it.price);
-                return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`;
-            }).join(', ');
+                // 2. Insert Items (Batch)
+                const values: any[] = [];
+                const itemQueries = input.items.map((it, idx) => {
+                    const offset = idx * 4;
+                    values.push(orderId, it.productId, it.quantity, it.price);
+                    return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`;
+                }).join(', ');
 
-            await client.query(
-                `INSERT INTO order_items (order_id, product_id, quantity, price) VALUES ${itemQueries}`,
-                values,
-            );
+                await client.query(
+                    `INSERT INTO order_items (order_id, product_id, quantity, price) VALUES ${itemQueries}`,
+                    values,
+                );
 
-            await client.query('COMMIT');
-            return { order_id: orderId, total_amount: input.totalAmount, payment_status: 'pending' };
+                await client.query('COMMIT');
+                return { order_id: orderId, total_amount: input.totalAmount, payment_status: 'pending' };
+            } catch (err) {
+                if (client) await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                if (client) client.release();
+            }
         } catch (err) {
-            await client.query('ROLLBACK');
-            logger.error({ err }, 'PostgreSQL order transaction failed');
-            throw new AppError(STATUS_CODES.INTERNAL_SERVER_ERROR, MESSAGES.INTERNAL_SERVER_ERROR);
-        } finally {
-            client.release();
+            logger.error({ err }, 'PostgreSQL order transaction failed, falling back to Supabase');
         }
     }
 
@@ -102,13 +106,22 @@ export const createOrderRepo = async (input: CreateOrderInput) => {
 
 export const fetchProductPricesByItemIds = async (productIds: number[]) => {
     if (pool) {
-        const res = await pool.query('SELECT id, price FROM products WHERE id = ANY($1)', [productIds]);
-        return res.rows;
+        try {
+            const res = await pool.query('SELECT id, price FROM products WHERE id = ANY($1)', [productIds]);
+            return res.rows;
+        } catch (err) {
+            logger.error({ err }, 'PostgreSQL fetchProductPricesByItemIds failed, falling back to Supabase');
+        }
     }
+
     if (supabase) {
         const { data, error } = await supabase.from('products').select('id, price').in('id', productIds);
-        if (error) throw error;
-        return data;
+        if (error) {
+            logger.error({ err: error }, 'Supabase fetchProductPricesByItemIds failed');
+            throw new AppError(STATUS_CODES.INTERNAL_SERVER_ERROR, MESSAGES.INTERNAL_SERVER_ERROR);
+        }
+        return data || [];
     }
+
     return [];
 };
