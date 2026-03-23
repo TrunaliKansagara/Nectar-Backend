@@ -46,4 +46,10 @@ export const MESSAGES = {
   QUANTITY_REQUIRED: 'Quantity is required',
   INVALID_QUANTITY: 'Quantity must be greater than 0',
   INVALID_ID: 'Invalid ID',
+
+  ORDER_PLACED: 'Order placed successfully',
+  ORDER_SUMMARY_FETCHED: 'Order summary fetched successfully',
+  INVALID_PROMO: 'Invalid or expired promo code',
+  ADDRESS_NOT_FOUND: 'Delivery address not found',
+  EMPTY_CART: 'Your cart is empty',
 } as const;
