@@ -23,8 +23,7 @@ export const addFavoriteRepo = async (userId: number, productId: number) => {
             );
             return true;
         } catch (err) {
-            logger.error({ err }, 'PostgreSQL addFavoriteRepo failed');
-            throw new AppError(STATUS_CODES.INTERNAL_SERVER_ERROR, MESSAGES.INTERNAL_SERVER_ERROR);
+            logger.error({ err }, 'PostgreSQL addFavoriteRepo failed, falling back to Supabase');
         }
     }
 
@@ -45,8 +44,7 @@ export const removeFavoriteRepo = async (userId: number, productId: number) => {
             await pool.query('DELETE FROM favorites WHERE user_id = $1 AND product_id = $2', [userId, productId]);
             return true;
         } catch (err) {
-            logger.error({ err }, 'PostgreSQL removeFavoriteRepo failed');
-            throw new AppError(STATUS_CODES.INTERNAL_SERVER_ERROR, MESSAGES.INTERNAL_SERVER_ERROR);
+            logger.error({ err }, 'PostgreSQL removeFavoriteRepo failed, falling back to Supabase');
         }
     }
 
@@ -81,8 +79,7 @@ export const getFavoritesRepo = async (userId: number, page: number, limit: numb
 
             return { data: dataRes.rows as FavoriteProduct[], total };
         } catch (err) {
-            logger.error({ err }, 'PostgreSQL getFavoritesRepo failed');
-            throw new AppError(STATUS_CODES.INTERNAL_SERVER_ERROR, MESSAGES.INTERNAL_SERVER_ERROR);
+            logger.error({ err }, 'PostgreSQL getFavoritesRepo failed, falling back to Supabase');
         }
     }
 
@@ -114,11 +111,19 @@ export const getFavoritesRepo = async (userId: number, page: number, limit: numb
 
 export const checkProductExistsRepo = async (productId: number) => {
     if (pool) {
-        const res = await pool.query('SELECT EXISTS(SELECT 1 FROM products WHERE id = $1)', [productId]);
-        return res.rows[0].exists;
+        try {
+            const res = await pool.query('SELECT EXISTS(SELECT 1 FROM products WHERE id = $1)', [productId]);
+            return res.rows[0].exists;
+        } catch (err) {
+            logger.error({ err }, 'PostgreSQL checkProductExistsRepo failed, falling back to Supabase');
+        }
     }
     if (supabase) {
-        const { data } = await supabase.from('products').select('id').eq('id', productId).limit(1);
+        const { data, error } = await supabase.from('products').select('id').eq('id', productId).limit(1);
+        if (error) {
+            logger.error({ err: error }, 'Supabase checkProductExistsRepo failed');
+            throw new AppError(STATUS_CODES.INTERNAL_SERVER_ERROR, MESSAGES.INTERNAL_SERVER_ERROR);
+        }
         return (data?.length ?? 0) > 0;
     }
     return false;
