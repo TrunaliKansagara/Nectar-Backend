@@ -23,6 +23,8 @@ export type ProductListItem = {
   name: string;
   price: number;
   image: string | null;
+  description: string | null;
+  unit: string | null;
   category_id: number | null;
   brand_id: number | null;
   created_at: string | null;
@@ -35,6 +37,13 @@ export type PaginatedResult<T> = {
     limit: number;
     total: number;
   };
+};
+
+export const extractUnit = (desc: string | null): string | null => {
+  if (!desc) return null;
+  const dotIndex = desc.indexOf('.');
+  if (dotIndex > 0) return desc.substring(0, dotIndex).trim();
+  return null;
 };
 
 const buildSortSql = (sort?: ProductSort) => {
@@ -84,7 +93,7 @@ export const listProductsRepo = async (
       const dataResult = await pool.query(
         `
           SELECT
-            p.id, p.name, p.price,
+            p.id, p.name, p.price, p.description,
             p.image, p.image_url, -- Support both columns
             p.category_id, p.brand_id, p.created_at
           FROM products p
@@ -99,6 +108,7 @@ export const listProductsRepo = async (
         data: dataResult.rows.map(r => ({
           ...r,
           image: r.image || r.image_url || null, // Normalize image
+          unit: extractUnit(r.description),
         })) as ProductListItem[],
         pagination: { page, limit, total },
       };
@@ -110,7 +120,7 @@ export const listProductsRepo = async (
   if (supabase) {
     let qb = supabase
       .from('products')
-      .select('id, name, price, image, image_url, category_id, brand_id, created_at', {
+      .select('id, name, price, description, image, image_url, category_id, brand_id, created_at', {
         count: 'exact',
       });
 
@@ -139,6 +149,8 @@ export const listProductsRepo = async (
       id: Number(r.id),
       name: String(r.name),
       price: Number(r.price),
+      description: r.description ? String(r.description) : null,
+      unit: extractUnit(r.description),
       image: (r.image ?? r.image_url ?? null) as string | null,
       category_id: r.category_id ? Number(r.category_id) : null,
       brand_id: r.brand_id ? Number(r.brand_id) : null,
@@ -158,14 +170,16 @@ export type ProductDetail = {
   id: number;
   name: string;
   description: string | null;
+  unit: string | null;
   price: number;
   images: string[];
+  is_favorite: boolean;
   created_at: string | null;
   brand: { id: number; name: string } | null;
   category: { id: number; name: string; image: string | null } | null;
 };
 
-export const getProductDetailRepo = async (productId: number): Promise<ProductDetail | null> => {
+export const getProductDetailRepo = async (productId: number, userId?: number): Promise<ProductDetail | null> => {
   if (pool) {
     try {
       const result = await pool.query(
@@ -181,14 +195,15 @@ export const getProductDetailRepo = async (productId: number): Promise<ProductDe
             b.name AS brand_name,
             c.id AS category_id,
             c.name AS category_name,
-            c.image AS category_image
+            c.image AS category_image,
+            EXISTS(SELECT 1 FROM favorites WHERE user_id = $2 AND product_id = $1) AS is_favorite
           FROM products p
           LEFT JOIN brands b ON b.id = p.brand_id
           LEFT JOIN categories c ON c.id = p.category_id
           WHERE p.id = $1
           LIMIT 1
         `,
-        [productId],
+        [productId, userId || null],
       );
 
       const row = result.rows[0] as any;
@@ -200,8 +215,10 @@ export const getProductDetailRepo = async (productId: number): Promise<ProductDe
         id: Number(row.id),
         name: String(row.name),
         description: (row.description ?? null) as string | null,
+        unit: extractUnit(row.description),
         price: Number(row.price),
         images: (images ?? []).filter(Boolean).map((v: any) => String(v)),
+        is_favorite: !!row.is_favorite,
         created_at: (row.created_at ?? null) as string | null,
         brand: row.brand_id ? { id: Number(row.brand_id), name: String(row.brand_name) } : null,
         category: row.category_id
@@ -243,12 +260,17 @@ export const getProductDetailRepo = async (productId: number): Promise<ProductDe
 
         const images = Array.isArray(row.images_json) ? row.images_json : [row.image_url].filter(Boolean);
 
+        const isFavoriteRes = await pool.query('SELECT EXISTS(SELECT 1 FROM favorites WHERE user_id = $1 AND product_id = $2) AS is_favorite', [userId || null, productId]);
+        const isFavorite = isFavoriteRes.rows[0].is_favorite;
+
         return {
           id: Number(row.id),
           name: String(row.name),
           description: (row.description ?? null) as string | null,
+          unit: extractUnit(row.description),
           price: Number(row.price),
           images: (images ?? []).filter(Boolean).map((v: any) => String(v)),
+          is_favorite: isFavorite,
           created_at: (row.created_at ?? null) as string | null,
           brand: null,
           category: row.category_id
@@ -300,6 +322,13 @@ export const getProductDetailRepo = async (productId: number): Promise<ProductDe
     }
     if (!product) return null;
 
+    // Check if favorite
+    let isFavorite = false;
+    if (userId) {
+      const { data: fav } = await supabase.from('favorites').select('id').eq('user_id', userId).eq('product_id', productId).maybeSingle();
+      isFavorite = !!fav;
+    }
+
     const brandId = (product as any).brand_id as number | undefined;
     const categoryId = (product as any).category_id as number | undefined;
 
@@ -331,8 +360,10 @@ export const getProductDetailRepo = async (productId: number): Promise<ProductDe
       id: Number((product as any).id),
       name: String((product as any).name),
       description: ((product as any).description ?? null) as string | null,
+      unit: extractUnit((product as any).description),
       price: Number((product as any).price),
       images: images.map((v: any) => String(v)),
+      is_favorite: isFavorite,
       created_at: (((product as any).created_at ?? null) as string | null) ?? null,
       brand: brand?.data ? { id: Number(brand.data.id), name: String(brand.data.name) } : null,
       category: category?.data

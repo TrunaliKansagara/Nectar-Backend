@@ -13,7 +13,8 @@ export const getProductsController = asyncHandler(async (req: Request, res: Resp
 });
 
 export const getProductDetailsController = asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.userId;
   const productId = Number((req.params as any).id);
-  const product = await getProductDetail(productId);
+  const product = await getProductDetail(productId, userId);
   return sendSuccess(res, STATUS_CODES.OK, MESSAGES.PRODUCT_FETCHED, product);
 });

@@ -4,6 +4,7 @@ import { MESSAGES } from '../constants/messages';
 import { STATUS_CODES } from '../constants/statusCodes';
 import { AppError } from '../utils/appError';
 import { logger } from '../utils/logger';
+import { extractUnit } from '../repositories/productRepository';
 
 export const getHomeData = async () => {
     if (pool) {
@@ -23,8 +24,8 @@ export const getHomeData = async () => {
             return {
                 banners: banners.rows,
                 categories: categories.rows,
-                exclusive_products: exclusive.rows,
-                best_selling: bestSelling.rows,
+                exclusive_products: exclusive.rows.map(r => ({ ...r, unit: extractUnit(r.description) })),
+                best_selling: bestSelling.rows.map(r => ({ ...r, unit: extractUnit(r.description) })),
             };
         } catch (err) {
             logger.error({ err }, 'PostgreSQL getHomeData failed, falling back to Supabase');
@@ -60,8 +61,8 @@ export const getHomeData = async () => {
         return {
             banners: banners.data,
             categories: categories.data,
-            exclusive_products: exclusive.data,
-            best_selling: bestSelling.data,
+            exclusive_products: (exclusive.data ?? []).map(r => ({ ...r, unit: extractUnit(r.description) })),
+            best_selling: (bestSelling.data ?? []).map(r => ({ ...r, unit: extractUnit(r.description) })),
         };
     }
 

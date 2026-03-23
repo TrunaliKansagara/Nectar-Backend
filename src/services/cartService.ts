@@ -5,6 +5,7 @@ import { STATUS_CODES } from '../constants/statusCodes';
 import { AppError } from '../utils/appError';
 import { logger } from '../utils/logger';
 import { getProductDetailsById } from './productService';
+import { extractUnit } from '../repositories/productRepository';
 
 export type CartItemWithProduct = {
   id: number;
@@ -25,7 +26,10 @@ const mapPgCartRow = (row: PgCartJoinRow): CartItemWithProduct => {
     id: Number(cart_item_id),
     quantity: Number(quantity),
     product_id: Number(product_id),
-    product,
+    product: {
+      ...product,
+      unit: extractUnit(product.description as string | null),
+    },
   };
 };
 
@@ -162,7 +166,10 @@ export const getCartItems = async (userId: number): Promise<CartItemWithProduct[
       id: Number(row.id),
       quantity: Number(row.quantity),
       product_id: Number(row.product_id),
-      product: productById.get(Number(row.product_id)) ?? {},
+      product: {
+        ...(productById.get(Number(row.product_id)) ?? {}),
+        unit: extractUnit((productById.get(Number(row.product_id))?.description ?? null) as string | null),
+      },
     }));
   }
 

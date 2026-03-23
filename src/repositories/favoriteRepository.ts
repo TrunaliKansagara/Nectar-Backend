@@ -4,12 +4,15 @@ import { MESSAGES } from '../constants/messages';
 import { STATUS_CODES } from '../constants/statusCodes';
 import { AppError } from '../utils/appError';
 import { logger } from '../utils/logger';
+import { extractUnit } from './productRepository';
 
 export type FavoriteProduct = {
     id: number;
     name: string;
     price: number;
     image: string | null;
+    description: string | null;
+    unit: string | null;
 };
 
 export const addFavoriteRepo = async (userId: number, productId: number) => {
@@ -68,7 +71,7 @@ export const getFavoritesRepo = async (userId: number, page: number, limit: numb
             const total = countRes.rows[0].total;
 
             const dataRes = await pool.query(
-                `SELECT p.id, p.name, p.price, COALESCE(p.image, p.image_url) AS image
+                `SELECT p.id, p.name, p.price, p.description, COALESCE(p.image, p.image_url) AS image
          FROM favorites f
          JOIN products p ON f.product_id = p.id
          WHERE f.user_id = $1
@@ -77,7 +80,16 @@ export const getFavoritesRepo = async (userId: number, page: number, limit: numb
                 [userId, limit, offset],
             );
 
-            return { data: dataRes.rows as FavoriteProduct[], total };
+            const items: FavoriteProduct[] = dataRes.rows.map(r => ({
+                id: Number(r.id),
+                name: String(r.name),
+                price: Number(r.price),
+                description: r.description ? String(r.description) : null,
+                unit: extractUnit(r.description),
+                image: (r.image ?? null) as string | null,
+            }));
+
+            return { data: items, total };
         } catch (err) {
             logger.error({ err }, 'PostgreSQL getFavoritesRepo failed, falling back to Supabase');
         }
@@ -86,7 +98,7 @@ export const getFavoritesRepo = async (userId: number, page: number, limit: numb
     if (supabase) {
         const { data, count, error } = await supabase
             .from('favorites')
-            .select('product_id, products(id, name, price, image, image_url)', { count: 'exact' })
+            .select('product_id, products(id, name, price, description, image, image_url)', { count: 'exact' })
             .eq('user_id', userId)
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1);
@@ -100,6 +112,8 @@ export const getFavoritesRepo = async (userId: number, page: number, limit: numb
             id: Number(f.products.id),
             name: String(f.products.name),
             price: Number(f.products.price),
+            description: f.products.description ? String(f.products.description) : null,
+            unit: extractUnit(f.products.description),
             image: (f.products.image || f.products.image_url || null) as string | null,
         }));
 

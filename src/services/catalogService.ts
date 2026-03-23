@@ -7,8 +7,8 @@ export const getProducts = async (query: ProductListQuery) => {
   return listProductsRepo(query);
 };
 
-export const getProductDetail = async (productId: number) => {
-  const product = await getProductDetailRepo(productId);
+export const getProductDetail = async (productId: number, userId?: number) => {
+  const product = await getProductDetailRepo(productId, userId);
   if (!product) throw new AppError(STATUS_CODES.NOT_FOUND, MESSAGES.PRODUCT_NOT_FOUND);
   return product;
 };
