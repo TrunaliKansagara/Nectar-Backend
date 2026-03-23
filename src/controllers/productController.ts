@@ -8,8 +8,8 @@ import { sendSuccess } from '../utils/responseHandler';
 import { type ProductListQuery } from '../repositories/productRepository';
 
 export const getProductsController = asyncHandler(async (req: Request, res: Response) => {
-  const data = await getProducts(req.query as unknown as ProductListQuery);
-  return sendSuccess(res, STATUS_CODES.OK, MESSAGES.PRODUCTS_FETCHED, data);
+  const { data, pagination } = await getProducts(req.query as unknown as ProductListQuery);
+  return sendSuccess(res, STATUS_CODES.OK, MESSAGES.PRODUCTS_FETCHED, data, pagination);
 });
 
 export const getProductDetailsController = asyncHandler(async (req: Request, res: Response) => {

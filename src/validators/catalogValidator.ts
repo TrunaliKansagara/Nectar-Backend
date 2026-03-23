@@ -7,6 +7,13 @@ const asOptionalInt = () => z.coerce.number().int().positive().optional();
 
 const asOptionalMoney = () => z.coerce.number().nonnegative().optional();
 
+const asCommaSeparatedIds = () =>
+  z.preprocess((val) => {
+    if (typeof val === 'string') return val.split(',').map((s) => Number(s.trim()));
+    if (Array.isArray(val)) return val.map((v) => Number(v));
+    return val;
+  }, z.array(z.number().int().positive()).optional());
+
 export const productIdParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
@@ -14,11 +21,11 @@ export const productIdParamsSchema = z.object({
 export const listProductsQuerySchema = z.object({
   page: asPositiveInt(1),
   limit: z.coerce.number().int().min(1).max(100).catch(10),
-  category_id: asOptionalInt(),
+  category_ids: asCommaSeparatedIds(),
+  brand_ids: asCommaSeparatedIds(),
   search: z.string().trim().min(1).optional(),
-  brand_id: asOptionalInt(),
   min_price: asOptionalMoney(),
   max_price: asOptionalMoney(),
-  sort: z.enum(['price_asc', 'price_desc', 'latest']).optional(),
+  sort: z.enum(['price_asc', 'price_desc', 'newest', 'latest']).optional(),
 });
 

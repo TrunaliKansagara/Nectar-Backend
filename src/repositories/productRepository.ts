@@ -5,14 +5,14 @@ import { STATUS_CODES } from '../constants/statusCodes';
 import { AppError } from '../utils/appError';
 import { logger } from '../utils/logger';
 
-export type ProductSort = 'price_asc' | 'price_desc' | 'latest';
+export type ProductSort = 'price_asc' | 'price_desc' | 'newest' | 'latest';
 
 export type ProductListQuery = {
   page: number;
   limit: number;
-  category_id?: number;
+  category_ids?: number[];
+  brand_ids?: number[];
   search?: string;
-  brand_id?: number;
   min_price?: number;
   max_price?: number;
   sort?: ProductSort;
@@ -29,12 +29,11 @@ export type ProductListItem = {
 };
 
 export type PaginatedResult<T> = {
-  items: T[];
+  data: T[];
   pagination: {
     page: number;
     limit: number;
     total: number;
-    total_pages: number;
   };
 };
 
@@ -44,6 +43,7 @@ const buildSortSql = (sort?: ProductSort) => {
       return 'ORDER BY p.price ASC, p.id DESC';
     case 'price_desc':
       return 'ORDER BY p.price DESC, p.id DESC';
+    case 'newest':
     case 'latest':
     default:
       return 'ORDER BY p.created_at DESC NULLS LAST, p.id DESC';
@@ -57,191 +57,101 @@ export const listProductsRepo = async (
   const limit = Math.min(100, Math.max(1, query.limit));
   const offset = (page - 1) * limit;
 
+  // Normalize inputs
+  const categoryIds = query.category_ids?.length ? query.category_ids : null;
+  const brandIds = query.brand_ids?.length ? query.brand_ids : null;
+  const search = query.search && query.search.trim().length > 0 ? `%${query.search.trim()}%` : null;
+  const minPrice = query.min_price !== undefined ? Number(query.min_price) : null;
+  const maxPrice = query.max_price !== undefined ? Number(query.max_price) : null;
+
   if (pool) {
     try {
-      const whereParts: string[] = [];
-      const values: Array<string | number> = [];
-
-      const add = (sql: string, value: string | number) => {
-        values.push(value);
-        whereParts.push(sql.replace('?', `$${values.length}`));
-      };
-
-      if (query.category_id !== undefined) add('p.category_id = ?', query.category_id);
-      if (query.brand_id !== undefined) add('p.brand_id = ?', query.brand_id);
-      if (query.min_price !== undefined) add('p.price >= ?', query.min_price);
-      if (query.max_price !== undefined) add('p.price <= ?', query.max_price);
-      if (query.search && query.search.trim().length > 0)
-        add('p.name ILIKE ?', `%${query.search.trim()}%`);
-
-      const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
-      const sortSql = buildSortSql(query.sort);
+      const values = [categoryIds, brandIds, search, minPrice, maxPrice];
+      const whereSql = `
+        WHERE ($1::int[] IS NULL OR p.category_id = ANY($1))
+        AND ($2::int[] IS NULL OR p.brand_id = ANY($2))
+        AND ($3::text IS NULL OR p.name ILIKE $3)
+        AND ($4::numeric IS NULL OR p.price >= $4)
+        AND ($5::numeric IS NULL OR p.price <= $5)
+      `;
 
       const countResult = await pool.query(
         `SELECT COUNT(*)::int AS total FROM products p ${whereSql}`,
         values,
       );
       const total = Number((countResult.rows[0] as any)?.total ?? 0);
-      const totalPages = Math.max(1, Math.ceil(total / limit));
 
-      const dataValues = [...values, limit, offset];
       const dataResult = await pool.query(
         `
           SELECT
-            p.id,
-            p.name,
-            p.price,
-            p.image,
-            p.category_id,
-            p.brand_id,
-            p.created_at
+            p.id, p.name, p.price,
+            p.image, p.image_url, -- Support both columns
+            p.category_id, p.brand_id, p.created_at
           FROM products p
           ${whereSql}
-          ${sortSql}
-          LIMIT $${values.length + 1}
-          OFFSET $${values.length + 2}
+          ${buildSortSql(query.sort)}
+          LIMIT $6 OFFSET $7
         `,
-        dataValues,
+        [...values, limit, offset],
       );
 
       return {
-        items: dataResult.rows as ProductListItem[],
-        pagination: { page, limit, total, total_pages: totalPages },
+        data: dataResult.rows.map(r => ({
+          ...r,
+          image: r.image || r.image_url || null, // Normalize image
+        })) as ProductListItem[],
+        pagination: { page, limit, total },
       };
     } catch (err) {
       logger.error({ err }, 'PostgreSQL listProductsRepo failed, falling back to Supabase');
-
-      // Backward compatibility: older schema uses image_url, and may not have brand_id
-      try {
-        const whereParts: string[] = [];
-        const values: Array<string | number> = [];
-        const add = (sql: string, value: string | number) => {
-          values.push(value);
-          whereParts.push(sql.replace('?', `$${values.length}`));
-        };
-
-        if (query.category_id !== undefined) add('p.category_id = ?', query.category_id);
-        if (query.min_price !== undefined) add('p.price >= ?', query.min_price);
-        if (query.max_price !== undefined) add('p.price <= ?', query.max_price);
-        if (query.search && query.search.trim().length > 0)
-          add('p.name ILIKE ?', `%${query.search.trim()}%`);
-
-        const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
-        const sortSql = buildSortSql(query.sort);
-
-        const countResult = await pool.query(
-          `SELECT COUNT(*)::int AS total FROM products p ${whereSql}`,
-          values,
-        );
-        const total = Number((countResult.rows[0] as any)?.total ?? 0);
-        const totalPages = Math.max(1, Math.ceil(total / limit));
-
-        const dataValues = [...values, limit, offset];
-        const dataResult = await pool.query(
-          `
-            SELECT
-              p.id,
-              p.name,
-              p.price,
-              p.image_url AS image,
-              p.category_id,
-              NULL::bigint AS brand_id,
-              p.created_at
-            FROM products p
-            ${whereSql}
-            ${sortSql}
-            LIMIT $${values.length + 1}
-            OFFSET $${values.length + 2}
-          `,
-          dataValues,
-        );
-
-        return {
-          items: dataResult.rows as ProductListItem[],
-          pagination: { page, limit, total, total_pages: totalPages },
-        };
-      } catch (retryErr) {
-        logger.error({ err: retryErr }, 'PostgreSQL listProductsRepo (fallback) failed');
-      }
     }
   }
 
   if (supabase) {
-    const pageFrom = offset;
-    const pageTo = offset + limit - 1;
+    let qb = supabase
+      .from('products')
+      .select('id, name, price, image, image_url, category_id, brand_id, created_at', {
+        count: 'exact',
+      });
 
-    // Prefer new schema (image + brand_id). If missing, fall back to image_url and/or no brand_id.
-    let qb = supabase.from('products').select('id, name, price, image, category_id, brand_id, created_at', {
-      count: 'exact',
-    });
+    if (categoryIds) qb = qb.in('category_id', categoryIds);
+    if (brandIds) qb = qb.in('brand_id', brandIds);
+    if (minPrice !== null) qb = qb.gte('price', minPrice);
+    if (maxPrice !== null) qb = qb.lte('price', maxPrice);
+    if (search) qb = qb.ilike('name', search);
 
-    if (query.category_id !== undefined) qb = qb.eq('category_id', query.category_id);
-    if (query.brand_id !== undefined) qb = qb.eq('brand_id', query.brand_id);
-    if (query.min_price !== undefined) qb = qb.gte('price', query.min_price);
-    if (query.max_price !== undefined) qb = qb.lte('price', query.max_price);
-    if (query.search && query.search.trim().length > 0) qb = qb.ilike('name', `%${query.search.trim()}%`);
-
-    if (query.sort === 'price_asc') qb = qb.order('price', { ascending: true }).order('id', { ascending: false });
+    if (query.sort === 'price_asc')
+      qb = qb.order('price', { ascending: true }).order('id', { ascending: false });
     else if (query.sort === 'price_desc')
       qb = qb.order('price', { ascending: false }).order('id', { ascending: false });
     else qb = qb.order('created_at', { ascending: false }).order('id', { ascending: false });
 
-    let data: any[] | null = null;
-    let count: number | null = null;
-    const primary = await qb.range(pageFrom, pageTo);
+    const { data, count, error } = await qb.range(offset, offset + limit - 1);
 
-    if (!primary.error) {
-      data = primary.data as any[] | null;
-      count = primary.count as number | null;
-    } else if ((primary.error as any)?.code === '42703') {
-      let qbFallback = supabase
-        .from('products')
-        .select('id, name, price, image_url, category_id, created_at', { count: 'exact' });
-
-      if (query.category_id !== undefined) qbFallback = qbFallback.eq('category_id', query.category_id);
-      if (query.min_price !== undefined) qbFallback = qbFallback.gte('price', query.min_price);
-      if (query.max_price !== undefined) qbFallback = qbFallback.lte('price', query.max_price);
-      if (query.search && query.search.trim().length > 0)
-        qbFallback = qbFallback.ilike('name', `%${query.search.trim()}%`);
-
-      if (query.sort === 'price_asc')
-        qbFallback = qbFallback.order('price', { ascending: true }).order('id', { ascending: false });
-      else if (query.sort === 'price_desc')
-        qbFallback = qbFallback.order('price', { ascending: false }).order('id', { ascending: false });
-      else qbFallback = qbFallback.order('created_at', { ascending: false }).order('id', { ascending: false });
-
-      const fallback = await qbFallback.range(pageFrom, pageTo);
-      if (fallback.error) {
-        logger.error({ err: fallback.error }, 'Supabase listProductsRepo failed');
-        throw new AppError(STATUS_CODES.INTERNAL_SERVER_ERROR, MESSAGES.INTERNAL_SERVER_ERROR);
-      }
-      data = fallback.data as any[] | null;
-      count = fallback.count as number | null;
-    } else {
-      logger.error({ err: primary.error }, 'Supabase listProductsRepo failed');
+    if (error) {
+      logger.error({ err: error }, 'Supabase listProductsRepo failed');
       throw new AppError(STATUS_CODES.INTERNAL_SERVER_ERROR, MESSAGES.INTERNAL_SERVER_ERROR);
     }
 
     const total = Number(count ?? 0);
-    const totalPages = Math.max(1, Math.ceil(total / limit));
 
     const items: ProductListItem[] = (data ?? []).map((r: any) => ({
       id: Number(r.id),
       name: String(r.name),
       price: Number(r.price),
-      image: ((r.image ?? r.image_url) ?? null) as string | null,
-      category_id: r.category_id === null || r.category_id === undefined ? null : Number(r.category_id),
-      brand_id: r.brand_id === null || r.brand_id === undefined ? null : Number(r.brand_id),
+      image: (r.image ?? r.image_url ?? null) as string | null,
+      category_id: r.category_id ? Number(r.category_id) : null,
+      brand_id: r.brand_id ? Number(r.brand_id) : null,
       created_at: (r.created_at ?? null) as string | null,
     }));
 
     return {
-      items,
-      pagination: { page, limit, total, total_pages: totalPages },
+      data: items,
+      pagination: { page, limit, total },
     };
   }
 
-  return { items: [], pagination: { page, limit, total: 0, total_pages: 1 } };
+  return { data: [], pagination: { page, limit, total: 0 } };
 };
 
 export type ProductDetail = {
@@ -296,10 +206,10 @@ export const getProductDetailRepo = async (productId: number): Promise<ProductDe
         brand: row.brand_id ? { id: Number(row.brand_id), name: String(row.brand_name) } : null,
         category: row.category_id
           ? {
-              id: Number(row.category_id),
-              name: String(row.category_name),
-              image: (row.category_image ?? null) as string | null,
-            }
+            id: Number(row.category_id),
+            name: String(row.category_name),
+            image: (row.category_image ?? null) as string | null,
+          }
           : null,
       };
     } catch (err) {
@@ -343,10 +253,10 @@ export const getProductDetailRepo = async (productId: number): Promise<ProductDe
           brand: null,
           category: row.category_id
             ? {
-                id: Number(row.category_id),
-                name: String(row.category_name),
-                image: (row.category_image ?? null) as string | null,
-              }
+              id: Number(row.category_id),
+              name: String(row.category_name),
+              image: (row.category_image ?? null) as string | null,
+            }
             : null,
         };
       } catch (retryErr) {
@@ -369,12 +279,12 @@ export const getProductDetailRepo = async (productId: number): Promise<ProductDe
         ? primary.data
         : (primary.error as any)?.code === '42703'
           ? (
-              await supabase
-                .from('products')
-                .select('id, name, description, price, image_url, category_id, created_at')
-                .eq('id', productId)
-                .maybeSingle()
-            ).data
+            await supabase
+              .from('products')
+              .select('id, name, description, price, image_url, category_id, created_at')
+              .eq('id', productId)
+              .maybeSingle()
+          ).data
           : null;
 
     const productError =
@@ -427,12 +337,12 @@ export const getProductDetailRepo = async (productId: number): Promise<ProductDe
       brand: brand?.data ? { id: Number(brand.data.id), name: String(brand.data.name) } : null,
       category: category?.data
         ? {
-            id: Number(category.data.id),
-            name: String(category.data.name),
-            image: (((category.data as any).image ?? (category.data as any).image_url) ?? null) as
-              | string
-              | null,
-          }
+          id: Number(category.data.id),
+          name: String(category.data.name),
+          image: (((category.data as any).image ?? (category.data as any).image_url) ?? null) as
+            | string
+            | null,
+        }
         : null,
     };
   }

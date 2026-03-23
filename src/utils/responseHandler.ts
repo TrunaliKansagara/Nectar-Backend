@@ -4,6 +4,11 @@ export type ApiResponse<TData = unknown> = {
   success: boolean;
   message: string;
   data?: TData;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+  };
   error?: unknown;
 };
 
@@ -12,11 +17,13 @@ export const sendSuccess = <TData>(
   statusCode: number,
   message: string,
   data?: TData,
+  pagination?: ApiResponse['pagination'],
 ) => {
   const payload: ApiResponse<TData> = {
     success: true,
     message,
     ...(data === undefined ? {} : { data }),
+    ...(pagination === undefined ? {} : { pagination }),
   };
   return res.status(statusCode).json(payload);
 };
