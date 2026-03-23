@@ -8,6 +8,7 @@ import { filterRoutes } from './filterRoutes';
 import { homeScreenRoutes } from './homeScreenRoutes';
 import { locationRoutes } from './locationRoutes';
 import { orderRoutes } from './orderRoutes';
+import { favoriteRoutes } from './favoriteRoutes';
 import { productRoutes } from './productRoutes';
 import { userRoutes } from './userRoutes';
 
@@ -22,5 +23,6 @@ routes.use('/api/home', homeScreenRoutes);
 routes.use('/api/products', productRoutes);
 routes.use('/api/cart', cartRoutes);
 routes.use('/api/locations', locationRoutes);
+routes.use('/api/favorites', favoriteRoutes);
 routes.use('/api/orders', orderRoutes);
 routes.use('/api/user', userRoutes);

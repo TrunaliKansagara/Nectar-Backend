@@ -52,4 +52,9 @@ export const MESSAGES = {
   INVALID_PROMO: 'Invalid or expired promo code',
   ADDRESS_NOT_FOUND: 'Delivery address not found',
   EMPTY_CART: 'Your cart is empty',
+
+  FAVORITE_ADDED: 'Product added to favorites',
+  FAVORITE_REMOVED: 'Product removed from favorites',
+  FAVORITES_FETCHED: 'Favorites fetched successfully',
+  ALREADY_IN_FAVORITES: 'Product is already in your favorites',
 } as const;
